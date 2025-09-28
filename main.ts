@@ -20,6 +20,7 @@ import { mb } from 'api'
 const BUILD_END_TOAST = "Bible build finished!";
 const SELECTED_TRANSLATION_OPTION = "<Selected reading translation, {0}>"
 const SELECTED_TRANSLATION_OPTION_KEY = "default"
+enum BookNameStyle { Display, Abbreviated, Full }
 
 // Remember to rename these classes and interfaces!
 
@@ -695,7 +696,10 @@ class BuildContext {
 		return name.replace(delimeter, "").slice(0,3);
 	}
 
-	format_book_name(book:BookData|undefined=undefined): string {
+	format_book_name(
+		book:BookData|undefined=undefined,
+		style: BookNameStyle|undefined=BookNameStyle.Display,
+	): string {
 		if (book === undefined) {
 			book = this.book
 		}
@@ -706,10 +710,10 @@ class BuildContext {
 			delim
 		)
 
-		if (this.plugin.settings.book_name_abbreviated) {
+		if ( (style === BookNameStyle.Abbreviated) ||
+		     (style === BookNameStyle.Display && this.plugin.settings.book_name_abbreviated) ) {
 			book_name = this.abbreviate_book_name(book_name, delim)
-		}
-
+			 }
 		return this.plugin.settings.book_name_format
 			.replace(/{translation}/g, String(this.translation))
 			.replace(/{book}/g, book_name)
@@ -723,6 +727,7 @@ class BuildContext {
 	format_book_name_without_order(
 		book:BookData|undefined=undefined,
 		casing:string|undefined=undefined,
+		style: BookNameStyle|undefined=BookNameStyle.Display,
 	): string {
 		if (book === undefined) {
 			book = this.book
@@ -737,9 +742,10 @@ class BuildContext {
 			delim
 		)
 
-		if (this.plugin.settings.book_name_abbreviated) {
+		if ( (style === BookNameStyle.Abbreviated) ||
+		     (style === BookNameStyle.Display && this.plugin.settings.book_name_abbreviated) ) {
 			book_name = this.abbreviate_book_name(book_name, delim)
-		}
+			 }
 
 		return book_name
 	}
@@ -748,6 +754,8 @@ class BuildContext {
 		return this.plugin.settings.chapter_body_format
 			.replace(/{translation}/g, String(this.translation))
 			.replace(/{book}/g, this.format_book_name_without_order(this.book))
+			.replace(/{book_name_full}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Full))
+			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Abbreviated))
 			.replace(
 				/{order}/g,
 				String(this.book_order(this.book))
@@ -885,6 +893,8 @@ class BuildContext {
 		return this.plugin.settings.verse_body_format
 			.replace(/{translation}/g, String(this.translation))
 			.replace(/{book}/g, book_name)
+			.replace(/{book_name_full}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Full))
+			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Abbreviated))
 			.replace(/{book_id}/g, String(this.book.id))
 			.replace(
 				/{order}/g,
@@ -915,6 +925,8 @@ class BuildContext {
 		return this.plugin.settings.chapter_index_format
 			.replace(/{translation}/g, String(this.translation))
 			.replace(/{book}/g, book_name)
+			.replace(/{book_name_full}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
+			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
 			.replace(/{order}/g, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
 			.replace(/{index}/g, this.format_index_name())
 			.replace(/{chapters}/g, chapter_links)
@@ -939,6 +951,8 @@ class BuildContext {
 		return this.plugin.settings.chapter_index_link_format
 			.replace(/{translation}/g, String(this.translation))
 			.replace(/{book}/g, book_name)
+			.replace(/{book_name_full}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
+			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
 			.replace(/{order}/g, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
 			.replace(/{chapter}/g, String(chapter))
 			.replace(/{chapter_name}/g, this.format_chapter_name("custom", chapter))
@@ -952,6 +966,8 @@ class BuildContext {
 		return this.plugin.settings.chapter_index_name_format
 			.replace(/{order}/g, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
 			.replace(/{book}/g, book_name)
+			.replace(/{book_name_full}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
+			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
 			.replace(/{translation}/g, String(this.translation))
 	}
 
