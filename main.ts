@@ -166,29 +166,26 @@ export function getPlugin():MyBible {
 }
 
 export function httpGet(theUrl: string): Promise<string> {
-	return new Promise(async (ok, err) => {
-		const timeout = setTimeout(() => {
-			const timeoutErr = new Error(
+	const request = requestUrl(theUrl).text;
+
+	const timeout = new Promise<never>((_, reject) =>
+		setTimeout(() => {
+			const callSiteErr = new Error(
 				`Request timed out after 10 seconds: ${theUrl}`
 			);
-			timeoutErr.name = "NetworkError";
-			err(timeoutErr);
-		}, 10000);
+			callSiteErr.name = "NetworkError";
+			reject(callSiteErr)
+		}, 10000)
+	);
 
-		try {
-			const text = await requestUrl(theUrl).text;
-			clearTimeout(timeout);
-			ok(text);
-		} catch (e) {
-			clearTimeout(timeout);
-			const networkErr = new Error(
-				`${e.message}: ${theUrl}`
-			);
-			networkErr.name = "NetworkError";
-			networkErr.stack = e.stack;
-			err(networkErr);
-		}
-	});
+	try {
+		return Promise.race([request, timeout])
+			.catch((e) => {
+				throw e;
+			});
+	} catch (e) {
+		throw e;
+	}
 }
 
 export function is_alpha(string: string): boolean {
@@ -434,20 +431,11 @@ export default class MyBible extends Plugin {
 			// Bible path is already a valid folder. No action needed
 		}
 
-		try {
-			let folders_and_files = await this.app.vault.adapter.list(bible_path);
-			if (folders_and_files.files.length + folders_and_files.folders.length != 0) {
-				new ClearOldBibleFilesModal(this.app, this).open()
-			} else {
-				await this._build_bible(bible_path);
-			}
-		} catch (e) {
-			new ErrorModal(
-				this.app,
-				this,
-				"Failed to build bible",
-				String(e),
-			).open();
+		let folders_and_files = await this.app.vault.adapter.list(bible_path);
+		if (folders_and_files.files.length + folders_and_files.folders.length != 0) {
+			new ClearOldBibleFilesModal(this.app, this).open()
+		} else {
+			await this._build_bible(bible_path);
 		}
 	}
 
@@ -579,9 +567,13 @@ export default class MyBible extends Plugin {
 			}
 	
 			await Promise.all(file_promises);
-		} catch (e)  {
-			this.show_toast_error(String(e))
-			throw e
+		} catch (e) {
+			new ErrorModal(
+				this.app,
+				this,
+				"Failed to build bible",
+				String(e),
+			).open();
 		}
 	}
 
@@ -1778,6 +1770,7 @@ class BollsLifeBibleAPI extends BibleAPI {
 		let bible: TranslationData = {
 			translation: translation,
 			books: {},
+		}
 
 		await new Promise(async (ok, err) => {
 			try {
@@ -1880,9 +1873,9 @@ class BollsLifeBibleAPI extends BibleAPI {
 	}
 
 	async generate_translation_map(translation: string) {
-		let map: Array<Record<string, any>> = await requestUrl(
+		let map: Array<Record<string, any>> = JSON.parse(await httpGet(
 			"https://bolls.life/get-books/{0}/".format(translation)
-		).json;
+		));
 		let book_data: Record<BookId, BookData> = [];
 		for (let item of map) {
 			let chapter_list = [...Array(item["chapters"]).keys()].map(x => x+1)
@@ -2807,7 +2800,18 @@ class ErrorModal extends Modal {
 		new Setting(contentEl)
 			.addButton((btn) =>
 				btn
-					.setButtonText("Close")
+					.setButtonText("Report an issue")
+					.onClick(() => {
+						window.open(
+							"https://github.com/GsLogiMaker/my-bible-obsidian-plugin/issues/new/choose",
+							'_blank'
+						);
+					})
+			)
+			.addButton((btn) =>
+				btn
+					.setButtonText("Dismiss")
+					.setCta()
 					.onClick(() => {
 						this.close();
 					})
