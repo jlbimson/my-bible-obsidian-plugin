@@ -2307,7 +2307,15 @@ class BuilderModal extends Modal {
 			desc.appendText("Current syntax: ")
 			desc.createEl("br")
 			desc.createEl("b", {
-				"text": "{0}".format(this.builder.format_book_name_without_order()),
+				"text": "{0}".format(this.builder.format_book_name(
+					new BookData(
+						DEFAULT_NAME_MAP["Song of Solomon"],
+						"Song of Solomon",
+						[],
+					),
+					BookNameStyle.Full,
+					))
+					.slice(3),
 				"cls": "u-pop",
 			})
 		}
@@ -2375,7 +2383,6 @@ class BuilderModal extends Modal {
 		setting.clear()
 		setting
 			.setName('Body format')
-			.setDesc('The format for the contents of chapters.')
 			.addExtraButton(btn => btn
 				.setIcon("rotate-ccw")
 				.setTooltip("Reset value")
@@ -2398,7 +2405,6 @@ class BuilderModal extends Modal {
 		;
 		this.description_updators["chapter_body"] = () => {
 			let desc = setting.descEl
-			this.builder.set_book_and_chapter(this.builder.books[43], 11)
 			desc.empty()
 			desc.appendText("Formats the contents of chapters. ")
 			desc.createEl("a", {
@@ -2407,6 +2413,7 @@ class BuilderModal extends Modal {
 			})
 			desc.appendText(".")
 		}
+		this.description_updators["chapter_body"]()
 	}
 
 	renderChapterName(setting: Setting) {
@@ -2452,6 +2459,7 @@ class BuilderModal extends Modal {
 				"cls": "u-pop",
 			})
 		}
+		this.description_updators["chapter_name"]()
 	}
 
 	// Verse renders
@@ -2501,6 +2509,7 @@ class BuilderModal extends Modal {
 				})
 			}
 		}
+		this.description_updators["verse_body"]()
 	}
 
 	// Book index
@@ -2550,6 +2559,7 @@ class BuilderModal extends Modal {
 				"cls": "u-pop",
 			})
 		}
+		this.description_updators["index_name"]()
 	}
 
 	renderIndexBookLink(setting: Setting) {
@@ -2598,6 +2608,7 @@ class BuilderModal extends Modal {
 				"cls": "u-pop",
 			})
 		}
+		this.description_updators["index_element"]()
 	}
 
 	renderIndexBody(setting: Setting) {
@@ -2639,6 +2650,7 @@ class BuilderModal extends Modal {
 			})
 			desc.appendText(". ")
 		}
+		this.description_updators["index_body"]()
 	}
 
 	// Chapter index
@@ -2689,6 +2701,7 @@ class BuilderModal extends Modal {
 				"cls": "u-pop",
 			})
 		}
+		this.description_updators["chapter_index_name"]()
 	}
 
 	renderChapterIndexLink(setting: Setting) {
@@ -2737,6 +2750,7 @@ class BuilderModal extends Modal {
 				"cls": "u-pop",
 			})
 		}
+		this.description_updators["chapter_index_element"]()
 	}
 
 	renderChapterIndexBody(setting: Setting) {
@@ -2776,6 +2790,7 @@ class BuilderModal extends Modal {
 			})
 			desc.appendText(".")
 		}
+		this.description_updators["chapter_index_body"]()
 	}
 
 	
@@ -2815,6 +2830,7 @@ class ErrorModal extends Modal {
 			.addButton((btn) =>
 				btn
 					.setButtonText("Report an issue")
+					.setCta()
 					.onClick(() => {
 						window.open(
 							REPORT_ISSUE_URL,
@@ -2825,7 +2841,6 @@ class ErrorModal extends Modal {
 			.addButton((btn) =>
 				btn
 					.setButtonText("Dismiss")
-					.setCta()
 					.onClick(() => {
 						this.close();
 					})
