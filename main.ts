@@ -166,16 +166,29 @@ export function getPlugin():MyBible {
 }
 
 export function httpGet(theUrl: string): Promise<string> {
-	try {
-		return new Promise(async (ok, err) => {
-			ok(await requestUrl(theUrl).text);
-		});
-	} catch (e) {
-		let err = new Error(e.message)
-		err.name = "NetworkError:"
-		err.stack = e.stack
-		throw err
-	}
+	return new Promise(async (ok, err) => {
+		const timeout = setTimeout(() => {
+			const timeoutErr = new Error(
+				`Request timed out after 10 seconds: ${theUrl}`
+			);
+			timeoutErr.name = "NetworkError";
+			err(timeoutErr);
+		}, 10000);
+
+		try {
+			const text = await requestUrl(theUrl).text;
+			clearTimeout(timeout);
+			ok(text);
+		} catch (e) {
+			clearTimeout(timeout);
+			const networkErr = new Error(
+				`${e.message}: ${theUrl}`
+			);
+			networkErr.name = "NetworkError";
+			networkErr.stack = e.stack;
+			err(networkErr);
+		}
+	});
 }
 
 export function is_alpha(string: string): boolean {
@@ -421,11 +434,20 @@ export default class MyBible extends Plugin {
 			// Bible path is already a valid folder. No action needed
 		}
 
-		let folders_and_files = await this.app.vault.adapter.list(bible_path);
-		if (folders_and_files.files.length + folders_and_files.folders.length != 0) {
-			new ClearOldBibleFilesModal(this.app, this).open()
-		} else {
-			await this._build_bible(bible_path);
+		try {
+			let folders_and_files = await this.app.vault.adapter.list(bible_path);
+			if (folders_and_files.files.length + folders_and_files.folders.length != 0) {
+				new ClearOldBibleFilesModal(this.app, this).open()
+			} else {
+				await this._build_bible(bible_path);
+			}
+		} catch (e) {
+			new ErrorModal(
+				this.app,
+				this,
+				"Failed to build bible",
+				String(e),
+			).open();
 		}
 	}
 
@@ -1351,7 +1373,7 @@ class BibleAPI {
 	}
 
 	async get_book_data(translation: string, book_id:BookId): Promise<BookData> {
-		let book_key = "{0} {1}".format(translation, String(book_id));
+		let book_key = "{0}_{1}".format(translation, String(book_id));
 
 		let data = await this.sync_cache.sync(
 			"get_book_data_" + book_key,
@@ -1614,7 +1636,7 @@ class BibleAPI {
 	}
 
 	make_chapter_key(translation: string, book_id: number, chapter: Number) {
-		return "{0}.{1}.{2}".format(translation, String(book_id), String(chapter));
+		return "{0}_{1}_{2}".format(translation, String(book_id), String(chapter));
 	}
 
 	parse_html(html:string):string {
