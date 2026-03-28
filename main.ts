@@ -20,9 +20,8 @@ import { mb } from 'api'
 const BUILD_END_TOAST = "Bible build finished!";
 const SELECTED_TRANSLATION_OPTION = "<Selected reading translation, {0}>"
 const SELECTED_TRANSLATION_OPTION_KEY = "default"
+const REPORT_ISSUE_URL = "https://github.com/GsLogiMaker/my-bible-obsidian-plugin/issues/new/choose"
 enum BookNameStyle { Display, Abbreviated, Full }
-
-// Remember to rename these classes and interfaces!
 
 class Version {
 	major:number = 1
@@ -2803,7 +2802,7 @@ class ErrorModal extends Modal {
 					.setButtonText("Report an issue")
 					.onClick(() => {
 						window.open(
-							"https://github.com/GsLogiMaker/my-bible-obsidian-plugin/issues/new/choose",
+							REPORT_ISSUE_URL,
 							'_blank'
 						);
 					})
