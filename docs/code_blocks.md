@@ -14,14 +14,14 @@ MyBible provides a custom templating language which resembles BBCode.
 Converts to scriptural text in markdown.
 
 **Usage**
+````markdown
+```mybible
+[verse="Genesis 1:1 WEB"]
 ```
-    ```mybible
-    [verse="Genesis 1:1 WEB"]
-    ```
-```
+````
 **Result**
 ```
-     In the beginning Elohim created the heavens and the earth.
+In the beginning Elohim created the heavens and the earth.
 ```
 
 ***
@@ -30,11 +30,11 @@ Converts to scriptural text in markdown.
 Converts to the scriptual text of a random verse in markdown.
 
 **Usage**
+````markdown
+```mybible
+[randomverse seed="10565" separator=" " verseNumbers=true translation="WEB"]
 ```
-    ```mybible
-    [randomverse seed="10565" separator=" " verseNumbers=true translation="WEB"]
-    ```
-```
+````
 
 ***
 
@@ -42,16 +42,16 @@ Converts to the scriptual text of a random verse in markdown.
 Converts to the returned result of running Javascript code.
 
 **Usage**
+````markdown
+```mybible
+[js]this.myValue = "Hello"[/js]
+[js]return this.myValue + " world!"[/js]
+
 ```
-    ```mybible
-    [js]this.myValue = "Hello"[/js]
-    [js]return this.myValue + " world!"[/js]
-   
-    ```
-```
+````
 **Result**
 ```
-     Hello world!
+Hello world!
 ```
 
 # verse
@@ -59,13 +59,13 @@ Converts to the returned result of running Javascript code.
 The `verse` codeblock is the simplest way to fetch and render text from the scriptures.
 
 **Example**
+````markdown
+```verse
+Genesis 1:1 WEB
 ```
-    ```verse
-    Genesis 1:1 WEB
-    ```
-```
+````
 
 **Result**
 ```
-    In the beginning Elohim created the heavens and the earth.
+In the beginning Elohim created the heavens and the earth.
 ```
