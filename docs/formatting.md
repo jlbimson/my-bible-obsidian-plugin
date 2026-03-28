@@ -20,6 +20,8 @@ Formats the text body of chapter files.
 ### Supported tags
 - [`{translation}`](#translation)
 - [`{book}`](#book)
+- [`{book_full}`](#book_full)
+- [`{book_short}`](#book_short)
 - [`{order}`](#order)
 - [`{chapter}`](#chapter)
 - [`{chapter_name}`](#chapter_name)
@@ -41,6 +43,8 @@ Formats text for individual verses.
 ### Supported tags
 - [`{translation}`](#translation)
 - [`{book}`](#book)
+- [`{book_full}`](#book_full)
+- [`{book_short}`](#book_short)
 - [`{book_id}`](#book_id)
 - [`{order}`](#order)
 - [`{chapter}`](#chapter)
@@ -89,6 +93,8 @@ Formats each element in the indexs' chapter lists.
 ### Supported tags
 - [`{translation}`](#translation)
 - [`{book}`](#book)
+- [`{book_full}`](#book_full)
+- [`{book_short}`](#book_short)
 - [`{order}`](#order)
 - [`{chapter}`](#chapter)
 - [`{chapter_name}`](#chapter_name)
@@ -98,6 +104,8 @@ Formats the contents of the chapter indexes.
 ### Supported tags
 - [`{translation}`](#translation)
 - [`{book}`](#book)
+- [`{book_full}`](#book_full)
+- [`{book_short}`](#book_short)
 - [`{order}`](#order)
 - [`{index}`](#index)
 - [`{chapters}`](#chapters)
@@ -109,6 +117,10 @@ Formats the contents of the chapter indexes.
 The translation your Bible is being built for.
 ## `{book}`
 The name of the current book. If `Abbreviate names` is active, then this will be the abbreviated book name.
+## `{book_full}`
+The full name of the current book. Always the full name no matter if `Abbreviate names` is active or not.
+## `{book_short}`
+The abbreviated name of the current book. Always abbreviated no matter if `Abbreviate names` is active or not.
 ## `{book_id}`
 The ID for the current book.
 ## `{order}`

@@ -685,6 +685,36 @@ class MBArgValueParseError extends MBTagError {
 	}
 }
 
+class FormatKeys {
+	static translation = /{translation}/g
+	static order = /{order}/g
+	static book = /{book}/g
+	static book_full = /{book_full}/g
+	static book_short = /{book_short}/g
+	static chapter = /{chapter}/g
+	static chapter_name = /{chapter_name}/g
+	static chapter_index = /{chapter_index}/g
+	static last_chapter = /{last_chapter}/g
+	static last_chapter_name = /{last_chapter_name}/g
+	static last_chapter_book = /{last_chapter_book}/g
+	static next_chapter = /{next_chapter}/g
+	static next_chapter_name = /{next_chapter_name}/g
+	static next_chapter_book = /{next_chapter_book}/g
+	static first_chapter = /{first_chapter}/g
+	static first_chapter_name = /{first_chapter_name}/g
+	static final_chapter = /{final_chapter}/g
+	static final_chapter_name = /{final_chapter_name}/g
+	static verses = /{verses}/g
+	static book_id = /{book_id}/g
+	static verse_text = /{verse_text}/g
+	static verse = /{verse}/g
+	static index = /{index}/g
+	static chapters = /{chapters}/g
+	static old_testament = /{old_testament}/g
+	static new_testament = /{new_testament}/g
+	static apocrypha = /{apocrypha}/g
+}
+
 class BuildContext {
 	translation: string = ""
 	translation_texts: TranslationData
@@ -737,10 +767,10 @@ class BuildContext {
 			book_name = this.abbreviate_book_name(book_name, delim)
 			 }
 		return this.plugin.settings.book_name_format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, book_name)
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, book_name)
 			.replace(
-				/{order}/g,
+				FormatKeys.order,
 				String(this.book_order(book))
 					.padStart(2 * Number(this.plugin.settings.padded_order), "0")
 			)
@@ -774,29 +804,29 @@ class BuildContext {
 	
 	format_chapter_body(): string {
 		return this.plugin.settings.chapter_body_format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, this.format_book_name_without_order(this.book))
-			.replace(/{book_name_full}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Full))
-			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Abbreviated))
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, this.format_book_name_without_order(this.book))
+			.replace(FormatKeys.book_full, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Full))
+			.replace(FormatKeys.book_short, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Abbreviated))
 			.replace(
-				/{order}/g,
+				FormatKeys.order,
 				String(this.book_order(this.book))
 					.padStart(2 * Number(this.plugin.settings.padded_order), "0")
 			)
-			.replace(/{chapter}/g, String(this.chapter))
-			.replace(/{chapter_name}/g, this.format_chapter_name())
-			.replace(/{chapter_index}/g, this.format_chapter_index_name(this.book))
-			.replace(/{last_chapter}/g, String(this.prev_chapter))
-			.replace(/{last_chapter_name}/g, this.format_chapter_name("last"))
-			.replace(/{last_chapter_book}/g, this.format_book_name_without_order(this.prev_book))
-			.replace(/{next_chapter}/g, String(this.next_chapter))
-			.replace(/{next_chapter_name}/g, this.format_chapter_name("next"))
-			.replace(/{next_chapter_book}/g, this.format_book_name_without_order(this.next_book))
-			.replace(/{first_chapter}/g, String(this.book.chapters.first()))
-			.replace(/{first_chapter_name}/g, this.format_chapter_name("first"))
-			.replace(/{final_chapter}/g, String(this.book.chapters.last()))
-			.replace(/{final_chapter_name}/g, this.format_chapter_name("final"))
-			.replace(/{verses}/g, this.verses_text)
+			.replace(FormatKeys.chapter, String(this.chapter))
+			.replace(FormatKeys.chapter_name, this.format_chapter_name())
+			.replace(FormatKeys.chapter_index, this.format_chapter_index_name(this.book))
+			.replace(FormatKeys.last_chapter, String(this.prev_chapter))
+			.replace(FormatKeys.last_chapter_name, this.format_chapter_name("last"))
+			.replace(FormatKeys.last_chapter_book, this.format_book_name_without_order(this.prev_book))
+			.replace(FormatKeys.next_chapter, String(this.next_chapter))
+			.replace(FormatKeys.next_chapter_name, this.format_chapter_name("next"))
+			.replace(FormatKeys.next_chapter_book, this.format_book_name_without_order(this.next_book))
+			.replace(FormatKeys.first_chapter, String(this.book.chapters.first()))
+			.replace(FormatKeys.first_chapter_name, this.format_chapter_name("first"))
+			.replace(FormatKeys.final_chapter, String(this.book.chapters.last()))
+			.replace(FormatKeys.final_chapter_name, this.format_chapter_name("final"))
+			.replace(FormatKeys.verses, this.verses_text)
 	}
 
 	format_chapter_name(tense:string="current", custom_chapter:number|null = null): string {
@@ -866,15 +896,15 @@ class BuildContext {
 		}
 
 		return format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, book_name)
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, book_name)
 			.replace(
-				/{order}/g,
+				FormatKeys.order,
 				String(this.book_order(id))
 					.padStart(2 * Number(this.plugin.settings.padded_order), "0")
 			)
 			.replace(
-				/{chapter}/g,
+				FormatKeys.chapter,
 				String(chapter)
 					.padStart(chapter_pad_by * Number(this.plugin.settings.padded_chapter), "0"),
 			)
@@ -913,20 +943,20 @@ class BuildContext {
 		}
 
 		return this.plugin.settings.verse_body_format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, book_name)
-			.replace(/{book_name_full}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Full))
-			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Abbreviated))
-			.replace(/{book_id}/g, String(this.book.id))
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, book_name)
+			.replace(FormatKeys.book_full, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Full))
+			.replace(FormatKeys.book_short, this.format_book_name_without_order(this.book, undefined, BookNameStyle.Abbreviated))
+			.replace(FormatKeys.book_id, String(this.book.id))
 			.replace(
-				/{order}/g,
+				FormatKeys.order,
 				String(this.book_order(this.book))
 					.padStart(2 * Number(this.plugin.settings.padded_order), "0")
 			)
-			.replace(/{chapter}/g, String(this.chapter))
-			.replace(/{chapter_name}/g, this.format_chapter_name())
-			.replace(/{verse_text}/g, verse_text)
-			.replace(/{verse}/g, String(this.verse))
+			.replace(FormatKeys.chapter, String(this.chapter))
+			.replace(FormatKeys.chapter_name, this.format_chapter_name())
+			.replace(FormatKeys.verse_text, verse_text)
+			.replace(FormatKeys.verse, String(this.verse))
 	}
 
 	format_chapter_index(book: BookData): string {
@@ -945,14 +975,14 @@ class BuildContext {
 		}
 
 		return this.plugin.settings.chapter_index_format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, book_name)
-			.replace(/{book_name_full}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
-			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
-			.replace(/{order}/g, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
-			.replace(/{index}/g, this.format_index_name())
-			.replace(/{chapters}/g, chapter_links)
-			.replace(/{chapter_index}/g, this.format_chapter_index_name(book))
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, book_name)
+			.replace(FormatKeys.book_full, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
+			.replace(FormatKeys.book_short, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
+			.replace(FormatKeys.order, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
+			.replace(FormatKeys.index, this.format_index_name())
+			.replace(FormatKeys.chapters, chapter_links)
+			.replace(FormatKeys.chapter_index, this.format_chapter_index_name(book))
 		;
 	}
 
@@ -971,13 +1001,13 @@ class BuildContext {
 			chapter = this.chapter
 		}
 		return this.plugin.settings.chapter_index_link_format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, book_name)
-			.replace(/{book_name_full}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
-			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
-			.replace(/{order}/g, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
-			.replace(/{chapter}/g, String(chapter))
-			.replace(/{chapter_name}/g, this.format_chapter_name("custom", chapter))
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, book_name)
+			.replace(FormatKeys.book_full, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
+			.replace(FormatKeys.book_short, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
+			.replace(FormatKeys.order, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
+			.replace(FormatKeys.chapter, String(chapter))
+			.replace(FormatKeys.chapter_name, this.format_chapter_name("custom", chapter))
 	}
 	
 	format_chapter_index_name(book: BookData|undefined=undefined): string {
@@ -986,11 +1016,11 @@ class BuildContext {
 		}
 		let book_name = this.format_book_name_without_order(book)
 		return this.plugin.settings.chapter_index_name_format
-			.replace(/{order}/g, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
-			.replace(/{book}/g, book_name)
-			.replace(/{book_name_full}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
-			.replace(/{book_name_abbreviated}/g, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
-			.replace(/{translation}/g, String(this.translation))
+			.replace(FormatKeys.order, String(this.book_order(book)).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
+			.replace(FormatKeys.book, book_name)
+			.replace(FormatKeys.book_full, this.format_book_name_without_order(book, undefined, BookNameStyle.Full))
+			.replace(FormatKeys.book_short, this.format_book_name_without_order(book, undefined, BookNameStyle.Abbreviated))
+			.replace(FormatKeys.translation, String(this.translation))
 	}
 
 	format_index_element(book:BookData|BookId|undefined=undefined) {
@@ -1005,17 +1035,17 @@ class BuildContext {
 		let book_name = this.format_book_name_without_order(this.books[id])
 
 		let link = this.plugin.settings.index_link_format
-			.replace(/{translation}/g, String(this.translation))
-			.replace(/{book}/g, book_name)
-			.replace(/{order}/g, String(this.book_order(Number(id))).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
-			.replace(/{chapter_index}/g, this.format_chapter_index_name(this.books[id]))
+			.replace(FormatKeys.translation, String(this.translation))
+			.replace(FormatKeys.book, book_name)
+			.replace(FormatKeys.order, String(this.book_order(Number(id))).padStart(2 * Number(this.plugin.settings.padded_order), "0"))
+			.replace(FormatKeys.chapter_index, this.format_chapter_index_name(this.books[id]))
 			+ '\n'
 		return link
 	}
 	
 	format_index_name(): string {
 		return this.plugin.settings.index_name_format
-			.replace(/{translation}/g, this.translation)
+			.replace(FormatKeys.translation, this.translation)
 	}
 
 	format_index(): string {
@@ -1042,10 +1072,10 @@ class BuildContext {
 		apocr_links = apocr_links.slice(0, apocr_links.length-1)
 
 		return this.plugin.settings.index_format
-			.replace(/{translation}/g, this.translation)
-			.replace(/{old_testament}/g, old_t_links)
-			.replace(/{new_testament}/g, new_t_links)
-			.replace(/{apocrypha}/g, apocr_links)
+			.replace(FormatKeys.translation, this.translation)
+			.replace(FormatKeys.old_testament, old_t_links)
+			.replace(FormatKeys.new_testament, new_t_links)
+			.replace(FormatKeys.apocrypha, apocr_links)
 	}
 
 	set_book(book:BookData) {
@@ -1748,7 +1778,6 @@ class BollsLifeBibleAPI extends BibleAPI {
 		let bible: TranslationData = {
 			translation: translation,
 			books: {},
-		};
 
 		await new Promise(async (ok, err) => {
 			try {
