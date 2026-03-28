@@ -735,8 +735,20 @@ class BuildContext {
 		return book_id
 	}
 
-	abbreviate_book_name(name:string, delimeter:string): string {
-		return name.replace(delimeter, "").slice(0,3);
+	abbreviate_book_name(book:BookData, delimeter:string): string {
+		if (book.id == DEFAULT_NAME_MAP["Judges"]) {
+			return "Jdg"
+		}
+		if (book.id == DEFAULT_NAME_MAP["Philippians"]) {
+			return "Php"
+		}
+		if (book.id == DEFAULT_NAME_MAP["Philemon"]) {
+			return "Phm"
+		}
+
+		return book_id_to_name(book.id)
+			.replace(delimeter, "")
+			.slice(0,3);
 	}
 
 	format_book_name(
@@ -753,10 +765,13 @@ class BuildContext {
 			delim
 		)
 
-		if ( (style === BookNameStyle.Abbreviated) ||
-		     (style === BookNameStyle.Display && this.plugin.settings.book_name_abbreviated) ) {
-			book_name = this.abbreviate_book_name(book_name, delim)
-			 }
+		if (
+			(style === BookNameStyle.Abbreviated)
+			|| (style === BookNameStyle.Display && this.plugin.settings.book_name_abbreviated)
+		) {
+			book_name = this.abbreviate_book_name(book, delim)
+		}
+
 		return this.plugin.settings.book_name_format
 			.replace(FormatKeys.translation, String(this.translation))
 			.replace(FormatKeys.book, book_name)
@@ -787,7 +802,7 @@ class BuildContext {
 
 		if ( (style === BookNameStyle.Abbreviated) ||
 		     (style === BookNameStyle.Display && this.plugin.settings.book_name_abbreviated) ) {
-			book_name = this.abbreviate_book_name(book_name, delim)
+			book_name = this.abbreviate_book_name(book, delim)
 			 }
 
 		return book_name
