@@ -10,12 +10,18 @@ import {
 	normalizePath,
 	requestUrl,
 	MarkdownRenderer,
+	MarkdownPostProcessorContext,
+	Editor,
+	EditorSuggest,
+	EditorSuggestContext,
+	EditorSuggestTriggerInfo,
+	EditorPosition,
 } from 'obsidian'
 
 import { E_CANCELED, Mutex } from 'async-mutex'
-import { randomInt } from 'crypto'
 import { BBCodeTag, legacy, parse_mybible } from 'mybible_parser'
 import { mb } from 'api'
+import { buildVersePreviewExtension } from 'verse_preview'
 
 const BUILD_END_TOAST = "Bible build finished!";
 const SELECTED_TRANSLATION_OPTION = "<Selected reading translation, {0}>"
@@ -65,6 +71,9 @@ class MyBibleSettings {
 
 	build_with_dynamic_verses: boolean
 	verse_body_format: string
+
+	verse_preview_enabled: boolean
+	verse_preview_collapsed_by_default: boolean
 
 	index_enabled: boolean
 	index_name_format: string
@@ -133,6 +142,9 @@ const DEFAULT_SETTINGS: MyBibleSettings = {
 			+ "**[[{last_chapter_name}|⏪ {last_chapter_name}]] | [[{chapter_index}|Chapters]] | [[{next_chapter_name}|{next_chapter_name} ⏩]]**<br>"
 			+ "**[[{first_chapter_name}|First ({first_chapter})]] | [[{final_chapter_name}|Last ({final_chapter})]]**\n"
 	,
+	verse_preview_enabled: true,
+	verse_preview_collapsed_by_default: true,
+
 	index_enabled: true,
 	index_name_format: "-- Bible --",
 	index_link_format: "- [[{chapter_index}|{book}]]",
@@ -403,6 +415,17 @@ export default class MyBible extends Plugin {
 			MarkdownRenderer.render(this.app, text, el, "", this)
 		});
 
+		this.registerMarkdownPostProcessor((el, ctx) => {
+			if (!this.settings.verse_preview_enabled) {
+				return
+			}
+			return this.render_verse_quotes(el, ctx)
+		});
+
+		this.registerEditorExtension(buildVersePreviewExtension(this));
+
+		this.registerEditorSuggest(new VerseLinkSuggest(this));
+
 		this.addSettingTab(new SettingsTab(this.app, this));
 	}
 
@@ -574,6 +597,191 @@ export default class MyBible extends Plugin {
 				String(e),
 			).open();
 		}
+	}
+
+	/// Finds links to specific Bible verses within `el` and appends a
+	/// collapsible quote of that verse's text, pulled directly from the
+	/// built Bible note, right after the link.
+	async render_verse_quotes(el: HTMLElement, ctx: MarkdownPostProcessorContext) {
+		let bible_path = normalizePath(this.settings.bible_folder)
+		let links = el.querySelectorAll<HTMLAnchorElement>("a.internal-link")
+
+		for (const link of Array.from(links)) {
+			if (link.parentElement?.classList.contains("mb-verse-quote-summary")) {
+				// Already wrapped in a quote
+				continue
+			}
+
+			let raw_href = link.getAttribute("data-href") ?? link.getAttribute("href") ?? ""
+			let hash_i = raw_href.indexOf("#")
+			if (hash_i === -1) {
+				// Link doesn't point to a specific verse
+				continue
+			}
+
+			let linkpath = raw_href.slice(0, hash_i)
+			let subpath = raw_href.slice(hash_i + 1)
+			if (subpath.length === 0) {
+				continue
+			}
+
+			let file = this.app.metadataCache.getFirstLinkpathDest(linkpath, ctx.sourcePath)
+			if (file === null) {
+				continue
+			}
+			if (file.path !== bible_path && !file.path.startsWith(bible_path + "/")) {
+				// Not a link into the built Bible, ignore it
+				continue
+			}
+			if (!this.has_linked_section(file, subpath)) {
+				// No such heading/block (e.g. a broken or out-of-range verse link)
+				continue
+			}
+
+			let verse_text = await this.get_linked_section_markdown(file, subpath)
+			if (verse_text === null || verse_text.length === 0) {
+				continue
+			}
+
+			let details = document.createElement("details")
+			details.addClass("mb-verse-quote")
+			details.open = !this.settings.verse_preview_collapsed_by_default
+
+			let summary = details.createEl("summary", { cls: "mb-verse-quote-summary" })
+
+			// The link itself becomes the dropdown's title, instead of
+			// sitting above a separately-labeled quote. If it's showing its
+			// default un-aliased text (e.g. "Genesis 1#1"), display that as
+			// "Genesis 1:1" instead; a real custom alias is left alone.
+			if (link.textContent === "{0}#{1}".format(linkpath, subpath)) {
+				link.textContent = "{0}:{1}".format(linkpath, subpath)
+			}
+			link.replaceWith(details)
+			summary.appendChild(link)
+
+			let body = details.createDiv({ cls: "mb-verse-quote-body" })
+			await MarkdownRenderer.render(this.app, verse_text, body, ctx.sourcePath, this)
+		}
+	}
+
+	/// Synchronously checks whether `subpath` names a real heading, block,
+	/// or (for a `start-end` range) at least a real starting heading in
+	/// `file`, using only the metadata cache (no file read). Used to decide
+	/// whether a verse quote should be shown at all *before* constructing
+	/// anything for it, so a broken/out-of-range verse link never gets an
+	/// empty quote flashed onto the screen.
+	has_linked_section(file: TFile, subpath: string): boolean {
+		let cache = this.app.metadataCache.getFileCache(file)
+		if (cache === null) {
+			return false
+		}
+		if (subpath.startsWith("^")) {
+			let block_id = subpath.slice(1).toLowerCase()
+			return cache.blocks?.[block_id] !== undefined
+		}
+		let headings = cache.headings ?? []
+		const range = parse_verse_range(subpath)
+		if (range !== null) {
+			return headings.some(h => h.heading.trim() === String(range[0]))
+		}
+		let target = subpath.toLowerCase()
+		return headings.some(h => h.heading.toLowerCase() === target)
+	}
+
+	/// Returns the markdown found under the heading or block named
+	/// `subpath` within `file`, or null if no such heading/block exists.
+	/// `subpath` may also be a verse range like `"1-3"`, in which case the
+	/// text spans every *consecutively numbered* verse heading found
+	/// starting at the range's first verse, up to (and including) its last
+	/// — stopping early if the chapter runs out of verses before the range
+	/// does.
+	async get_linked_section_markdown(file: TFile, subpath: string): Promise<string|null> {
+		let cache = this.app.metadataCache.getFileCache(file)
+		if (cache === null) {
+			return null
+		}
+
+		let content = await this.app.vault.cachedRead(file)
+		let lines = content.split("\n")
+
+		if (subpath.startsWith("^")) {
+			let block_id = subpath.slice(1).toLowerCase()
+			let block = cache.blocks?.[block_id]
+			if (block === undefined) {
+				return null
+			}
+			return lines
+				.slice(block.position.start.line, block.position.end.line + 1)
+				.join("\n")
+				.trim()
+		}
+
+		let headings = cache.headings ?? []
+		const range = parse_verse_range(subpath)
+
+		let start_index: number
+		if (range !== null) {
+			start_index = headings.findIndex(h => h.heading.trim() === String(range[0]))
+		} else {
+			let target = subpath.toLowerCase()
+			start_index = headings.findIndex(h => h.heading.toLowerCase() === target)
+		}
+		if (start_index === -1) {
+			return null
+		}
+
+		// For a range, extend through as many consecutive verse headings as
+		// are available, up to (and including) the range's last verse.
+		let end_index = start_index
+		if (range !== null) {
+			let [start, end] = range
+			let expected = start + 1
+			while (
+				end_index + 1 < headings.length
+				&& expected <= end
+				&& headings[end_index + 1].heading.trim() === String(expected)
+			) {
+				end_index += 1
+				expected += 1
+			}
+		}
+
+		let start_line = headings[start_index].position.end.line + 1
+		let end_line = end_index + 1 < headings.length
+			? headings[end_index + 1].position.start.line
+			: lines.length
+
+		let text = lines.slice(start_line, end_line).join("\n").trim()
+		return text.length > 0 ? text : null
+	}
+
+	/// Finds the note in the built Bible that represents `chapter` of the
+	/// book with `book_id`, or null if it hasn't been built.
+	async resolve_chapter_file(book_id: BookId, chapter: number): Promise<TFile|null> {
+		let translation = this.settings.translation === SELECTED_TRANSLATION_OPTION_KEY
+			? this.settings.reading_translation
+			: this.settings.translation
+
+		let books = await this.bible_api.get_books_data(translation)
+		let book = books[book_id]
+		if (book === undefined || !book.has_chapter(chapter)) {
+			return null
+		}
+
+		let ctx = new BuildContext
+		ctx.plugin = this
+		ctx.translation = translation
+		ctx.set_books(books)
+		ctx.set_book_and_chapter(book, chapter)
+
+		let book_path = normalizePath(this.settings.bible_folder)
+		if (this.settings.book_folders_enabled) {
+			book_path += "/" + ctx.format_book_name(ctx.book)
+		}
+		let file_path = normalizePath("{0}/{1}.md".format(book_path, ctx.format_chapter_name()))
+
+		let file = this.app.vault.getAbstractFileByPath(file_path)
+		return file instanceof TFile ? file : null
 	}
 
 	show_toast_error(error:string) {
@@ -3073,6 +3281,274 @@ export class QuickChangeTranslationeModal extends FuzzySuggestModal<Translation>
 	}
 }
 
+interface VerseLinkSuggestion {
+	label: string
+	file: TFile
+	/// The verse (`"1"`), verse range (`"1-3"`), or null to link to the
+	/// whole chapter.
+	subpath: string|null
+}
+
+/// Matches `--` followed by up to 60 characters that don't contain a
+/// doubled dash (so a `---` rule, or a fresh `--` reference starting right
+/// after, never gets swallowed into the query), but single dashes *are*
+/// allowed through, since verse ranges use them (`1-3`).
+const VERSE_TRIGGER_REGEX = /--((?:[^-\n]|-(?!-)){0,60})$/
+
+/// Matches the reference part at the end of a query, e.g. the `1:1-3` in
+/// `gen1:1-3` or `Genesis 1:1-3`. Searching from the right (rather than
+/// requiring whitespace before it) is what lets both spaced ("Genesis
+/// 1:1") and unspaced ("gen1:1") forms work, and what lets a book name
+/// that itself starts with a digit (e.g. "1 John") be told apart from the
+/// chapter number that follows it.
+const VERSE_REFERENCE_REGEX = /(\d+)(?::(\d+)(?:-(\d+))?)?$/
+
+/// Lets the user type `--Book Chapter:Verse` (e.g. `--Genesis 1:1`,
+/// `--gen1:1-3`) to insert a link to that verse or verse range, mirroring
+/// the trigger used by the "Obsidian Bible Reference" plugin. Book names
+/// may be abbreviated (see {@link find_book_id_by_name}), and the space
+/// between book and chapter is optional. The inserted link is rendered as
+/// a collapsible verse quote by {@link MyBible.render_verse_quotes} and
+/// the live preview extension.
+class VerseLinkSuggest extends EditorSuggest<VerseLinkSuggestion> {
+	plugin: MyBible
+
+	constructor(plugin: MyBible) {
+		super(plugin.app)
+		this.plugin = plugin
+	}
+
+	onTrigger(cursor: EditorPosition, editor: Editor, file: TFile | null): EditorSuggestTriggerInfo | null {
+		let line = editor.getLine(cursor.line)
+		let sub = line.slice(0, cursor.ch)
+		let match = sub.match(VERSE_TRIGGER_REGEX)
+		if (match === null) {
+			return null
+		}
+
+		let start_ch = sub.length - match[0].length
+		if (start_ch > 0 && sub[start_ch - 1] === "-") {
+			// Don't trigger inside a longer run of dashes, e.g. a `---` rule
+			return null
+		}
+
+		return {
+			start: { line: cursor.line, ch: start_ch },
+			end: cursor,
+			query: match[1],
+		}
+	}
+
+	async getSuggestions(context: EditorSuggestContext): Promise<VerseLinkSuggestion[]> {
+		let ref_match = context.query.match(VERSE_REFERENCE_REGEX)
+		if (ref_match === null) {
+			return []
+		}
+
+		let book_part = context.query.slice(0, ref_match.index).trim()
+		if (book_part.length === 0) {
+			return []
+		}
+
+		let book_id = find_book_id_by_name(book_part)
+		if (book_id === null) {
+			return []
+		}
+
+		let chapter = Number(ref_match[1])
+		let verse_start = ref_match[2] !== undefined ? Number(ref_match[2]) : undefined
+		let verse_end = ref_match[3] !== undefined ? Number(ref_match[3]) : verse_start
+
+		let file = await this.plugin.resolve_chapter_file(book_id, chapter)
+		if (file === null) {
+			return []
+		}
+
+		let book_name = book_id_to_name(book_id)
+
+		if (verse_start === undefined) {
+			return [{
+				label: "{0} {1}".format(book_name, String(chapter)),
+				file,
+				subpath: null,
+			}]
+		}
+		if (!this.plugin.has_linked_section(file, String(verse_start))) {
+			return []
+		}
+
+		let is_range = verse_end !== undefined && verse_end > verse_start
+		let subpath = is_range
+			? "{0}-{1}".format(String(verse_start), String(verse_end))
+			: String(verse_start)
+		let label = is_range
+			? "{0} {1}:{2}-{3}".format(book_name, String(chapter), String(verse_start), String(verse_end))
+			: "{0} {1}:{2}".format(book_name, String(chapter), String(verse_start))
+
+		return [{
+			label,
+			file,
+			subpath,
+		}]
+	}
+
+	renderSuggestion(value: VerseLinkSuggestion, el: HTMLElement): void {
+		el.addClass("mod-complex")
+		let content = el.createDiv({ cls: "suggestion-content" })
+		content.createDiv({ cls: "suggestion-title", text: value.label })
+		if (value.subpath !== null) {
+			let note = content.createDiv({ cls: "suggestion-note" })
+			this.plugin.get_linked_section_markdown(value.file, value.subpath).then(text => {
+				if (text === null) {
+					return
+				}
+				note.setText(text.length > 120 ? text.slice(0, 120) + "…" : text)
+			})
+		}
+	}
+
+	selectSuggestion(value: VerseLinkSuggestion, evt: MouseEvent | KeyboardEvent): void {
+		if (this.context === null) {
+			return
+		}
+		let link = this.plugin.app.fileManager.generateMarkdownLink(
+			value.file,
+			this.context.file.path,
+			value.subpath !== null ? "#" + value.subpath : undefined,
+		)
+		this.context.editor.replaceRange(link, this.context.start, this.context.end)
+
+		let end_ch = this.context.start.ch + link.length
+		this.context.editor.setCursor({ line: this.context.start.line, ch: end_ch })
+	}
+}
+
+/// Common abbreviated/short forms of book names that aren't simply a
+/// prefix of the full name (e.g. "Jas" for James, "Mt" for Matthew), keyed
+/// by the abbreviation with spaces and periods removed, lowercased.
+const BOOK_ABBREVIATIONS: Record<string, BookId> = {
+	"gen": 1, "ge": 1, "gn": 1,
+	"exo": 2, "ex": 2, "exod": 2,
+	"lev": 3, "le": 3, "lv": 3,
+	"num": 4, "nu": 4, "nm": 4, "numb": 4,
+	"deut": 5, "deu": 5, "dt": 5,
+	"josh": 6, "jos": 6, "jsh": 6,
+	"judg": 7, "jdg": 7, "jg": 7, "jdgs": 7,
+	"rut": 8, "ru": 8,
+	"1sam": 9, "1sa": 9, "1s": 9,
+	"2sam": 10, "2sa": 10, "2s": 10,
+	"1kgs": 11, "1ki": 11, "1k": 11,
+	"2kgs": 12, "2ki": 12, "2k": 12,
+	"1chr": 13, "1ch": 13,
+	"2chr": 14, "2ch": 14,
+	"ezr": 15,
+	"neh": 16,
+	"esth": 17, "est": 17,
+	"psa": 19, "ps": 19, "psm": 19, "pslm": 19,
+	"prov": 20, "pro": 20, "prv": 20,
+	"eccl": 21, "ecc": 21, "qoh": 21,
+	"song": 22, "sos": 22, "sng": 22, "canticles": 22, "cant": 22,
+	"isa": 23, "is": 23,
+	"jer": 24, "je": 24,
+	"ezek": 26, "eze": 26, "ezk": 26,
+	"dan": 27, "dn": 27,
+	"hos": 28,
+	"joe": 29, "jl": 29,
+	"amo": 30, "am": 30,
+	"obad": 31, "oba": 31, "ob": 31,
+	"jnh": 32, "jon": 32,
+	"mic": 33, "mc": 33,
+	"nah": 34, "na": 34,
+	"hab": 35, "hb": 35,
+	"zeph": 36, "zep": 36, "zp": 36,
+	"hag": 37, "hg": 37,
+	"zech": 38, "zec": 38, "zc": 38,
+	"mal": 39, "ml": 39,
+	"matt": 40, "mat": 40, "mt": 40,
+	"mrk": 41, "mar": 41, "mk": 41, "mr": 41,
+	"luk": 42, "lk": 42,
+	"joh": 43, "jhn": 43, "jn": 43,
+	"act": 44, "ac": 44,
+	"rom": 45, "ro": 45, "rm": 45,
+	"1cor": 46, "1co": 46,
+	"2cor": 47, "2co": 47,
+	"gal": 48, "ga": 48,
+	"eph": 49,
+	"phil": 50, "php": 50, "pp": 50,
+	"col": 51,
+	"1thess": 52, "1th": 52,
+	"2thess": 53, "2th": 53,
+	"1tim": 54, "1ti": 54,
+	"2tim": 55, "2ti": 55,
+	"tit": 56,
+	"philem": 57, "phm": 57, "pm": 57,
+	"heb": 58,
+	"jas": 59, "jm": 59, "jam": 59,
+	"1pet": 60, "1pe": 60, "1pt": 60,
+	"2pet": 61, "2pe": 61, "2pt": 61,
+	"1jn": 62, "1jo": 62,
+	"2jn": 63, "2jo": 63,
+	"3jn": 64, "3jo": 64,
+	"jud": 65, "jde": 65,
+	"rev": 66, "re": 66,
+}
+
+/// Strips spaces and periods and lowercases, so "1 Sam.", "1sam", and
+/// "1 SAM" all compare equal.
+function normalize_book_name(name: string): string {
+	return name.toLowerCase().replace(/[.\s]/g, "")
+}
+
+/// Finds a book's ID by its full name or a common abbreviation,
+/// case-insensitively and ignoring spaces/periods (e.g. "Genesis", "gen",
+/// and "Gen." all resolve to the same book). Falls back to an unambiguous
+/// prefix match against full book names for anything not covered by
+/// {@link BOOK_ABBREVIATIONS}.
+function find_book_id_by_name(name: string): BookId|null {
+	let target = normalize_book_name(name)
+	if (target.length === 0) {
+		return null
+	}
+
+	for (const key of Object.keys(DEFAULT_NAME_MAP)) {
+		if (normalize_book_name(key) === target) {
+			return DEFAULT_NAME_MAP[key]
+		}
+	}
+
+	if (target in BOOK_ABBREVIATIONS) {
+		return BOOK_ABBREVIATIONS[target]
+	}
+
+	let matches = new Set(
+		Object.keys(DEFAULT_NAME_MAP)
+			.filter(key => normalize_book_name(key).startsWith(target))
+			.map(key => DEFAULT_NAME_MAP[key])
+	)
+	if (matches.size === 1) {
+		return matches.values().next().value ?? null
+	}
+
+	return null
+}
+
+/// Parses a verse or verse-range subpath like `"1"` or `"1-3"` into a
+/// `[start, end]` pair (equal for a single verse), or returns null if
+/// `subpath` isn't a plain numeric verse reference (e.g. a block reference
+/// or a heading from a customized verse format) or the range is backwards.
+function parse_verse_range(subpath: string): [number, number]|null {
+	let match = subpath.match(/^(\d+)(?:-(\d+))?$/)
+	if (match === null) {
+		return null
+	}
+	let start = Number(match[1])
+	let end = match[2] !== undefined ? Number(match[2]) : start
+	if (end < start) {
+		return null
+	}
+	return [start, end]
+}
+
 class SettingsTab extends PluginSettingTab {
 	plugin: MyBible;
 
@@ -3131,6 +3607,32 @@ class SettingsTab extends PluginSettingTab {
 				})
 				drop.setValue(this.plugin.settings.reading_translation)
 			})
+		;
+
+		new Setting(containerEl)
+			.setName('Show verse text under Bible links')
+			.setDesc('When enabled, links to a specific verse in your built Bible (e.g. [[Genesis 1#1]]) will show the verse text in a collapsible quote right after the link, in both Reading view and Live Preview. Type "--" followed by a reference, like "--Genesis 1:1", to quickly insert one of these links as you write.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.verse_preview_enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.verse_preview_enabled = value
+					await this.plugin.saveSettings()
+					this.plugin.app.workspace.updateOptions()
+				})
+			)
+		;
+
+		new Setting(containerEl)
+			.setName('Collapse verse previews by default')
+			.setDesc('When enabled, verse previews start collapsed, and can be expanded by clicking on them.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.verse_preview_collapsed_by_default)
+				.onChange(async (value) => {
+					this.plugin.settings.verse_preview_collapsed_by_default = value
+					await this.plugin.saveSettings()
+					this.plugin.app.workspace.updateOptions()
+				})
+			)
 		;
 
 		let e_js_e = new Setting(containerEl)

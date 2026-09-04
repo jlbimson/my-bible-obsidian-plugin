@@ -1,6 +1,5 @@
 
-import { randomInt } from "crypto";
-import { 
+import {
 	BOOK_ID_TO_NAME,
 	cyrb128,
 	DEFAULT_NAME_MAP,
@@ -334,7 +333,7 @@ export module mb {
 		if (seed !== undefined) {
 			random_index = cyrb128(seed) % VERSE_POOL.length
 		} else {
-			random_index = randomInt(VERSE_POOL.length)
+			random_index = Math.floor(Math.random() * VERSE_POOL.length)
 		}
 		return newRef(VERSE_POOL[random_index])
 	}

@@ -50,6 +50,95 @@ If your plugin does not need CSS, delete this file.
 	}
 
 
+/* --- Verse quote previews --- */
+
+	details.mb-verse-quote {
+		display: block;
+		margin: 0.25em 0;
+		padding: 0.15em 0.65em;
+		border-left: 3px solid var(--text-accent);
+		border-radius: 4px;
+		background-color: var(--background-secondary);
+	}
+	details.mb-verse-quote > summary.mb-verse-quote-summary {
+		display: flex;
+		align-items: center;
+		gap: 0.35em;
+		min-height: 1.4em;
+		cursor: pointer;
+		list-style: none;
+	}
+	details.mb-verse-quote > summary.mb-verse-quote-summary::-webkit-details-marker {
+		display: none;
+	}
+	details.mb-verse-quote > summary.mb-verse-quote-summary::before {
+		content: "▸";
+		display: inline-block;
+		width: 1em;
+		color: var(--text-accent);
+		transition: transform 0.1s ease;
+	}
+	details.mb-verse-quote[open] > summary.mb-verse-quote-summary::before {
+		transform: rotate(90deg);
+	}
+	/* Reading view: the link itself sits inside the summary as its title */
+	details.mb-verse-quote > summary.mb-verse-quote-summary > a.internal-link {
+		font-size: var(--font-ui-small);
+		font-weight: 600;
+	}
+	.mb-verse-quote-body {
+		margin: 0.4em 0 0.3em 0;
+		padding-left: 0.6em;
+		border-left: 2px solid var(--background-modifier-border);
+		color: var(--text-normal);
+	}
+	.mb-verse-quote-body > *:first-child {
+		margin-top: 0;
+	}
+	.mb-verse-quote-body > *:last-child {
+		margin-bottom: 0;
+	}
+	/* Verse-range quotes include a heading per verse (e.g. "4", "5"),
+	   immediately followed by a paragraph of that verse's text. The
+	   plugin's page-wide compact heading style doesn't reach in here (it
+	   only targets .markdown-preview-view), so on their own these would
+	   render as two separate block lines with the theme's normal heading
+	   margins between them. Instead, float the verse number to the left
+	   and let its paragraph wrap up beside it, so the number reads as an
+	   inline superscript and the verse's text starts on the same line. */
+	.mb-verse-quote-body h1,
+	.mb-verse-quote-body h2,
+	.mb-verse-quote-body h3,
+	.mb-verse-quote-body h4,
+	.mb-verse-quote-body h5,
+	.mb-verse-quote-body h6 {
+		float: left;
+		clear: left;
+		margin: 0 0.35em 0 0;
+		font-size: var(--font-ui-smaller);
+		font-weight: 700;
+		line-height: inherit;
+		color: var(--text-faint);
+	}
+	.mb-verse-quote-body p {
+		margin: 0.3em 0;
+		overflow: hidden;
+	}
+
+	/* Live preview: sits inline right next to the link's text so, collapsed,
+	   it reads as a single line; switches to a block once opened so the
+	   quote body gets the full line width instead of wrapping narrowly. */
+	details.mb-verse-quote-live-preview {
+		display: inline-block;
+		vertical-align: text-bottom;
+		max-width: 100%;
+	}
+	details.mb-verse-quote-live-preview[open] {
+		display: block;
+		margin: 0.35em 0;
+	}
+
+
 	.markdown-preview-view h6 {
 		/* Verse style general (reading mode) */
 		position: relative;
