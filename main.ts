@@ -651,9 +651,16 @@ export default class MyBible extends Plugin {
 
 			// The link itself becomes the dropdown's title, instead of
 			// sitting above a separately-labeled quote. If it's showing its
-			// default un-aliased text (e.g. "Genesis 1#1"), display that as
-			// "Genesis 1:1" instead; a real custom alias is left alone.
-			if (link.textContent === "{0}#{1}".format(linkpath, subpath)) {
+			// default un-aliased text, display that as "Genesis 1:1"
+			// instead; a real custom alias matches neither form below and is
+			// left alone. Reading View renders that default text with the
+			// subpath separated by " > " ("Genesis 1 > 1") rather than the
+			// raw "Genesis 1#1" the link was written as.
+			let link_text = link.textContent ?? ""
+			if (
+				link_text === "{0}#{1}".format(linkpath, subpath)
+				|| link_text === "{0} > {1}".format(linkpath, subpath)
+			) {
 				link.textContent = "{0}:{1}".format(linkpath, subpath)
 			}
 			link.replaceWith(details)
@@ -746,7 +753,13 @@ export default class MyBible extends Plugin {
 			}
 		}
 
-		let start_line = headings[start_index].position.end.line + 1
+		// When the quote spans more than one verse, include the starting
+		// verse's own heading so every verse in the body is numbered (the
+		// later verses' headings already fall inside the slice). A single
+		// verse needs no number — the quote's title already names it.
+		let start_line = end_index > start_index
+			? headings[start_index].position.start.line
+			: headings[start_index].position.end.line + 1
 		let end_line = end_index + 1 < headings.length
 			? headings[end_index + 1].position.start.line
 			: lines.length

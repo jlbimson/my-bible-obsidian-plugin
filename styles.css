@@ -63,20 +63,37 @@ If your plugin does not need CSS, delete this file.
 	details.mb-verse-quote > summary.mb-verse-quote-summary {
 		display: flex;
 		align-items: center;
-		gap: 0.35em;
-		min-height: 1.4em;
+		gap: 0.2em;
+		min-height: 28px;
 		cursor: pointer;
 		list-style: none;
 	}
 	details.mb-verse-quote > summary.mb-verse-quote-summary::-webkit-details-marker {
 		display: none;
 	}
+	/* The arrow is the main way to expand/collapse a quote, and on a touch
+	   screen it has to be hit with a fingertip, so size its box for the
+	   finger (~28px, bumped further on mobile) rather than to the glyph. */
 	details.mb-verse-quote > summary.mb-verse-quote-summary::before {
 		content: "▸";
-		display: inline-block;
-		width: 1em;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 28px;
+		height: 28px;
+		font-size: 1.2em;
+		line-height: 1;
 		color: var(--text-accent);
 		transition: transform 0.1s ease;
+	}
+	.is-mobile details.mb-verse-quote > summary.mb-verse-quote-summary {
+		min-height: 40px;
+	}
+	.is-mobile details.mb-verse-quote > summary.mb-verse-quote-summary::before {
+		width: 40px;
+		height: 40px;
+		font-size: 1.5em;
 	}
 	details.mb-verse-quote[open] > summary.mb-verse-quote-summary::before {
 		transform: rotate(90deg);
@@ -165,4 +182,21 @@ If your plugin does not need CSS, delete this file.
 		/* Verse style specific to popovers from hovering over links */
 		top: 10px !important;
 		margin-top: 0px !important;
+	}
+
+	/* Reading mode applies the verse-number style above to every h6 on the
+	   page, including the ones inside a verse quote — where its offsets
+	   (tuned for a full chapter note) drag the number left, on top of the
+	   quote's border. Inside a quote the float layout does the positioning
+	   instead, so undo the offsets and keep the number's look. Must come
+	   last: these selectors only tie with the reading-mode ones above. */
+	.markdown-preview-view .mb-verse-quote-body h1,
+	.markdown-preview-view .mb-verse-quote-body h2,
+	.markdown-preview-view .mb-verse-quote-body h3,
+	.markdown-preview-view .mb-verse-quote-body h4,
+	.markdown-preview-view .mb-verse-quote-body h5,
+	.markdown-preview-view .mb-verse-quote-body h6 {
+		position: static;
+		margin: 0 0.35em 0 0 !important;
+		line-height: inherit;
 	}
