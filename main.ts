@@ -89,6 +89,13 @@ class MyBibleSettings {
 
 	_built_translation: string;
 	_last_opened_version: Version|undefined
+	/// Each translation's book names and chapter counts, remembered from
+	/// the last time they were fetched, keyed by translation. Purely a
+	/// cache of {@link BibleAPI.get_books_data}, kept so that naming a
+	/// chapter's note doesn't need the network: the notes themselves are
+	/// already in the vault, so features that only look one up (such as
+	/// the `--` verse link suggester) keep working offline.
+	_book_names: Record<string, Record<BookId, [name: string, chapter_count: number]>>
 	_plugin:MyBible
 
 	constructor() {}
@@ -170,6 +177,7 @@ const DEFAULT_SETTINGS: MyBibleSettings = {
 
 	_built_translation: "",
 	_last_opened_version: undefined,
+	_book_names: {},
 } as MyBibleSettings
 
 export function getPlugin():MyBible {
@@ -775,7 +783,7 @@ export default class MyBible extends Plugin {
 			? this.settings.reading_translation
 			: this.settings.translation
 
-		let books = await this.bible_api.get_books_data(translation)
+		let books = await this.get_books_data_offline(translation)
 		let book = books[book_id]
 		if (book === undefined || !book.has_chapter(chapter)) {
 			return null
@@ -795,6 +803,69 @@ export default class MyBible extends Plugin {
 
 		let file = this.app.vault.getAbstractFileByPath(file_path)
 		return file instanceof TFile ? file : null
+	}
+
+	/// Book names and chapter counts for `translation`, without requiring
+	/// the network: fetching them normally hits the Bible API, which fails
+	/// offline. Falls back to what was remembered the last time they were
+	/// fetched (see {@link MyBibleSettings._book_names}), and past that to
+	/// the default English names. Only for naming a chapter's note, never
+	/// for building one — a name guessed from the fallback is checked
+	/// against the vault anyway, so at worst nothing is found.
+	async get_books_data_offline(translation: string): Promise<Record<BookId, BookData>> {
+		let remembered = (this.settings._book_names ?? {})[translation]
+		if (remembered === undefined) {
+			// Never fetched on this device; the API is the only source
+			try {
+				return await this.bible_api.get_books_data(translation)
+			} catch (e) {
+				// Offline, or the API is unreachable; fall through
+			}
+		}
+
+		// A remembered translation lists exactly the books it has, which may
+		// not be the default 66 (e.g. one carrying the apocrypha)
+		let book_ids = remembered !== undefined
+			? Object.keys(remembered)
+			: Object.keys(BOOK_ID_TO_NAME)
+
+		let books: Record<BookId, BookData> = []
+		for (const book_id_ of book_ids) {
+			const book_id = Number(book_id_)
+			let [name, chapter_count] = remembered?.[book_id]
+				?? [BOOK_ID_TO_NAME[book_id], MAX_CHAPTER_COUNT]
+			if (name === undefined) {
+				continue
+			}
+			books[book_id] = new BookData(
+				book_id,
+				name,
+				[...Array(chapter_count).keys()].map(x => x + 1),
+			)
+		}
+		return books
+	}
+
+	/// Remembers `translation`'s book names and chapter counts so they're
+	/// still available offline. See {@link MyBibleSettings._book_names}.
+	async remember_books_data(translation: string, books: Record<BookId, BookData>) {
+		// An object, not an array: saved as JSON, a sparse array would come
+		// back with a null in every gap, book id 1 (Genesis) included
+		let entry: Record<BookId, [name: string, chapter_count: number]> = {}
+		for (const book_id_ of Object.keys(books)) {
+			const book_id = Number(book_id_)
+			entry[book_id] = [books[book_id].name, books[book_id].chapters.length]
+		}
+
+		let remembered = this.settings._book_names ?? {}
+		if (JSON.stringify(remembered[translation]) === JSON.stringify(entry)) {
+			return
+		}
+		// Replace the record rather than writing into it: when nothing has
+		// been remembered yet it's still the object from DEFAULT_SETTINGS,
+		// and saveSettings() drops any setting left identical to its default.
+		this.settings._book_names = Object.assign({}, remembered, { [translation]: entry })
+		await this.saveSettings()
 	}
 
 	show_toast_error(error:string) {
@@ -1645,10 +1716,13 @@ class BibleAPI {
 	}
 
 	async get_books_data(translation: string): Promise<Record<BookId, BookData>> {
-		return await this.sync_cache.sync(
+		let books = await this.sync_cache.sync(
 			"get_books_data_" + translation,
 			() => this._get_books_data(translation),
 		)
+		// Keep a copy for when the API can't be reached
+		this.plugin.remember_books_data(translation, books).catch(() => {})
+		return books
 	}
 
 	async cache_chapter(
@@ -3777,6 +3851,12 @@ export const DEFAULT_NAME_MAP: Record<string, BookId> = {
 	"Prayer of Manasseh": 83,
 	"Azariah": 88, // TODO: Fill in this jump in number
 }
+
+/// Chapters assumed per book when a translation's real chapter counts
+/// aren't known (see {@link MyBible.get_books_data_offline}). It's the
+/// longest book in the Bible, so no real chapter is ever excluded; the
+/// ones over a given book's true length simply resolve to no note.
+const MAX_CHAPTER_COUNT = 150
 
 export const BOOK_ID_TO_NAME: Record<BookId, string> = {
 	1: "Genesis",
