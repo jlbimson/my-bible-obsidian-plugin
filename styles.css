@@ -52,7 +52,7 @@ If your plugin does not need CSS, delete this file.
 
 /* --- Verse quote previews --- */
 
-	details.mb-verse-quote {
+	.mb-verse-quote {
 		display: block;
 		margin: 0.25em 0;
 		padding: 0.15em 0.65em;
@@ -60,7 +60,7 @@ If your plugin does not need CSS, delete this file.
 		border-radius: 4px;
 		background-color: var(--background-secondary);
 	}
-	details.mb-verse-quote > summary.mb-verse-quote-summary {
+	.mb-verse-quote > .mb-verse-quote-summary {
 		display: flex;
 		align-items: center;
 		gap: 0.2em;
@@ -74,7 +74,7 @@ If your plugin does not need CSS, delete this file.
 	/* The arrow is the main way to expand/collapse a quote, and on a touch
 	   screen it has to be hit with a fingertip, so size its box for the
 	   finger (~28px, bumped further on mobile) rather than to the glyph. */
-	details.mb-verse-quote > summary.mb-verse-quote-summary::before {
+	.mb-verse-quote > .mb-verse-quote-summary::before {
 		content: "▸";
 		display: inline-flex;
 		align-items: center;
@@ -87,10 +87,10 @@ If your plugin does not need CSS, delete this file.
 		color: var(--text-accent);
 		transition: transform 0.1s ease;
 	}
-	.is-mobile details.mb-verse-quote > summary.mb-verse-quote-summary {
+	.is-mobile .mb-verse-quote > .mb-verse-quote-summary {
 		min-height: 40px;
 	}
-	.is-mobile details.mb-verse-quote > summary.mb-verse-quote-summary::before {
+	.is-mobile .mb-verse-quote > .mb-verse-quote-summary::before {
 		width: 40px;
 		height: 40px;
 		font-size: 1.5em;
@@ -98,11 +98,12 @@ If your plugin does not need CSS, delete this file.
 	details.mb-verse-quote[open] > summary.mb-verse-quote-summary::before {
 		transform: rotate(90deg);
 	}
-	/* Reading view: the link itself sits inside the summary as its title */
-	details.mb-verse-quote > summary.mb-verse-quote-summary > a.internal-link {
+	/* The link itself sits inside the summary as the quote's title */
+	.mb-verse-quote > .mb-verse-quote-summary > a.internal-link {
 		font-size: var(--font-ui-small);
 		font-weight: 600;
 	}
+
 	.mb-verse-quote-body {
 		margin: 0.4em 0 0.3em 0;
 		padding-left: 0.6em;
@@ -115,31 +116,27 @@ If your plugin does not need CSS, delete this file.
 	.mb-verse-quote-body > *:last-child {
 		margin-bottom: 0;
 	}
-	/* Verse-range quotes include a heading per verse (e.g. "4", "5"),
-	   immediately followed by a paragraph of that verse's text. The
-	   plugin's page-wide compact heading style doesn't reach in here (it
-	   only targets .markdown-preview-view), so on their own these would
-	   render as two separate block lines with the theme's normal heading
-	   margins between them. Instead, float the verse number to the left
-	   and let its paragraph wrap up beside it, so the number reads as an
-	   inline superscript and the verse's text starts on the same line. */
-	.mb-verse-quote-body h1,
-	.mb-verse-quote-body h2,
-	.mb-verse-quote-body h3,
-	.mb-verse-quote-body h4,
-	.mb-verse-quote-body h5,
-	.mb-verse-quote-body h6 {
-		float: left;
-		clear: left;
-		margin: 0 0.35em 0 0;
+	/* A verse-range quote numbers its verses. The number is placed inside
+	   its verse's own first paragraph (see MyBible.render_verse_body), so
+	   it simply flows with the text and can't drift away from the verse it
+	   belongs to, whatever the surrounding layout does. */
+	.mb-verse-quote-body .mb-verse-num {
+		margin-right: 0.35em;
 		font-size: var(--font-ui-smaller);
 		font-weight: 700;
-		line-height: inherit;
 		color: var(--text-faint);
 	}
 	.mb-verse-quote-body p {
 		margin: 0.3em 0;
-		overflow: hidden;
+	}
+	.mb-verse-quote-body .mb-verse > *:first-child {
+		margin-top: 0;
+	}
+	.mb-verse-quote-body .mb-verse > *:last-child {
+		margin-bottom: 0;
+	}
+	.mb-verse-quote-body .mb-verse + .mb-verse {
+		margin-top: 0.3em;
 	}
 
 	/* Live preview: sits inline right next to the link's text so, collapsed,
@@ -185,10 +182,10 @@ If your plugin does not need CSS, delete this file.
 	}
 
 	/* Reading mode applies the verse-number style above to every h6 on the
-	   page, including the ones inside a verse quote — where its offsets
-	   (tuned for a full chapter note) drag the number left, on top of the
-	   quote's border. Inside a quote the float layout does the positioning
-	   instead, so undo the offsets and keep the number's look. Must come
+	   page, including any that turns up inside a verse quote — where its
+	   offsets (tuned for a full chapter note) drag it left, on top of the
+	   quote's border. Verse numbers are no longer headings, so this only
+	   catches a heading that's part of the quoted text itself. Must come
 	   last: these selectors only tie with the reading-mode ones above. */
 	.markdown-preview-view .mb-verse-quote-body h1,
 	.markdown-preview-view .mb-verse-quote-body h2,
@@ -199,4 +196,40 @@ If your plugin does not need CSS, delete this file.
 		position: static;
 		margin: 0 0.35em 0 0 !important;
 		line-height: inherit;
+	}
+
+/* --- Quoted verse callouts --- */
+
+	/* The callout a quoted verse is pasted into (`> [!bible]-`). It's a
+	   plain Obsidian callout, so it folds, renders and exports on its own
+	   with this plugin turned off; all that's added here is a look that
+	   says which callout it is. */
+	.callout[data-callout="bible"] {
+		/* A light gray with a little blue in it. The one color sets both
+		   the tint below and the title and icon, so on a light theme it's
+		   stepped down a shade to stay readable against white. */
+		--callout-color: 156, 172, 194;
+		--callout-icon: lucide-book-open;
+		/* Obsidian tints a callout with its own color at 10% opacity, which
+		   leaves a quote nearly the same shade as the page around it. Twice
+		   that reads as a block of its own without shouting. Marked
+		   important only because a theme's own callout rule can otherwise
+		   outweigh this one depending on which stylesheet loads last. */
+		background-color: rgba(var(--callout-color), 0.2) !important;
+	}
+	.theme-light .callout[data-callout="bible"] {
+		--callout-color: 108, 126, 150;
+	}
+
+	@media print {
+		/* Exporting a note to PDF prints it as it stands, so a folded quote
+		   would leave nothing on the page but its title. The verse text is
+		   right there in the note, so print all of it; the fold arrow,
+		   meaning nothing on paper, goes away instead. */
+		.callout[data-callout="bible"].is-collapsed .callout-content {
+			display: block !important;
+		}
+		.callout[data-callout="bible"] .callout-fold {
+			display: none !important;
+		}
 	}

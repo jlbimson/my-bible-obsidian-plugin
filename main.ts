@@ -27,6 +27,12 @@ const BUILD_END_TOAST = "Bible build finished!";
 const SELECTED_TRANSLATION_OPTION = "<Selected reading translation, {0}>"
 const SELECTED_TRANSLATION_OPTION_KEY = "default"
 const REPORT_ISSUE_URL = "https://github.com/GsLogiMaker/my-bible-obsidian-plugin/issues/new/choose"
+
+/// The type of the callout that a quoted verse's own text is pasted into
+/// by {@link VerseLinkSuggest}. A callout is Obsidian's own foldable
+/// section, so the quote keeps working — folding included — with this
+/// plugin disabled, and exports (to PDF, say) as the plain text it is.
+const VERSE_QUOTE_CALLOUT_TYPE = "bible"
 enum BookNameStyle { Display, Abbreviated, Full }
 
 class Version {
@@ -618,8 +624,11 @@ export default class MyBible extends Plugin {
 		let links = el.querySelectorAll<HTMLAnchorElement>("a.internal-link")
 
 		for (const link of Array.from(links)) {
-			if (link.parentElement?.classList.contains("mb-verse-quote-summary")) {
-				// Already wrapped in a quote
+			if (link.closest(".mb-verse-quote, .callout, blockquote") !== null) {
+				// Already inside a quote: one an earlier pass built, or a
+				// callout holding the verse's text already (which is what
+				// the `--` trigger inserts), or a blockquote the writer
+				// meant as one. Quoting into a quote helps nobody.
 				continue
 			}
 
@@ -678,7 +687,36 @@ export default class MyBible extends Plugin {
 			summary.appendChild(link)
 
 			let body = details.createDiv({ cls: "mb-verse-quote-body" })
-			await MarkdownRenderer.render(this.app, verse_text, body, ctx.sourcePath, this)
+			await this.render_verse_body(verse_text, body, ctx.sourcePath)
+		}
+	}
+
+	/// Renders the text of a quoted verse (or range of them) into
+	/// `container`, with each verse's number set inline at the start of its
+	/// own text.
+	///
+	/// A chapter note numbers its verses with a heading apiece, which is
+	/// how the numbers are told apart from the text here — but leaving them
+	/// as headings and styling them into place doesn't survive Reading
+	/// view, where every block gets wrapped in a div of its own and the
+	/// numbers drift away from the verses they belong to. So each number is
+	/// put inside its verse's first paragraph instead, where it stays
+	/// regardless of how the text around it is laid out.
+	async render_verse_body(markdown: string, container: HTMLElement, source_path: string) {
+		for (const verse of parse_quoted_verses(markdown)) {
+			let el = container.createDiv({ cls: "mb-verse" })
+			await MarkdownRenderer.render(this.app, verse.text, el, source_path, this)
+			if (verse.number === null) {
+				continue
+			}
+			// The first paragraph, so the number reads as part of the verse
+			// rather than as a line above it; the div itself is the
+			// fallback for a verse that rendered to nothing paragraph-like
+			let target = el.querySelector("p") ?? el
+			target.insertBefore(
+				createSpan({ cls: "mb-verse-num", text: verse.number }),
+				target.firstChild,
+			)
 		}
 	}
 
@@ -3377,6 +3415,11 @@ interface VerseLinkSuggestion {
 	/// The verse (`"1"`), verse range (`"1-3"`), or null to link to the
 	/// whole chapter.
 	subpath: string|null
+	/// The text of the verse(s), read ahead of time so that choosing the
+	/// suggestion can paste it in without waiting. Null when there's no
+	/// text to quote (a whole-chapter reference, or a verse whose text
+	/// couldn't be read), in which case a plain link is inserted instead.
+	verse_text: string|null
 }
 
 /// Matches `--` followed by up to 60 characters that don't contain a
@@ -3393,13 +3436,85 @@ const VERSE_TRIGGER_REGEX = /--((?:[^-\n]|-(?!-)){0,60})$/
 /// chapter number that follows it.
 const VERSE_REFERENCE_REGEX = /(\d+)(?::(\d+)(?:-(\d+))?)?$/
 
+/// One verse within a quote: its number, and its text. The number is null
+/// for text that came before any verse heading — which is the whole of a
+/// single verse quoted on its own, since the quote's title already names
+/// it.
+interface QuotedVerse {
+	number: string|null
+	text: string
+}
+
+/// Splits the markdown of a quoted passage into the verses it holds. A
+/// chapter note gives every verse a heading of its own holding just the
+/// verse's number, so a heading starts a new verse and everything up to
+/// the next one is that verse's text.
+function parse_quoted_verses(markdown: string): QuotedVerse[] {
+	let verses: QuotedVerse[] = []
+	let current: QuotedVerse = { number: null, text: "" }
+	let push_current = () => {
+		if (current.number !== null || current.text.trim().length > 0) {
+			current.text = current.text.trim()
+			verses.push(current)
+		}
+	}
+
+	for (const line of markdown.replace(/\r/g, "").split("\n")) {
+		let heading = line.match(/^#{1,6}\s+(.*\S)\s*$/)
+		if (heading === null) {
+			current.text += line + "\n"
+			continue
+		}
+		push_current()
+		current = { number: heading[1], text: "" }
+	}
+	push_current()
+
+	return verses
+}
+
+/// Builds the markdown of a quoted verse: an Obsidian callout, folded
+/// open or closed to start with, titled by the verse's link and holding
+/// the verse text itself. A callout is Obsidian's own foldable section, so
+/// nothing here depends on this plugin — the quote still folds, and still
+/// reads as the verse it quotes, with the plugin turned off or the note
+/// carried somewhere else entirely.
+function build_verse_quote_callout(
+	link: string,
+	verse_text: string,
+	collapsed: boolean,
+): string {
+	// Verse numbers are headings in a chapter note, where each verse is a
+	// section of its own. Quoted into a callout they'd read as headings
+	// rather than as verse numbers, so they're set in bold at the head of
+	// their verse's own text instead.
+	let lines: string[] = []
+	for (const verse of parse_quoted_verses(verse_text)) {
+		let verse_lines = verse.text.split("\n")
+		if (verse.number !== null) {
+			verse_lines[0] = "**{0}** {1}"
+				.format(verse.number, verse_lines[0])
+				.trim()
+		}
+		lines.push(...verse_lines)
+	}
+
+	return "> [!{0}]{1} {2}\n{3}".format(
+		VERSE_QUOTE_CALLOUT_TYPE,
+		collapsed ? "-" : "+",
+		link,
+		lines.map(line => ("> " + line).trimEnd()).join("\n"),
+	)
+}
+
 /// Lets the user type `--Book Chapter:Verse` (e.g. `--Genesis 1:1`,
 /// `--gen1:1-3`) to insert a link to that verse or verse range, mirroring
 /// the trigger used by the "Obsidian Bible Reference" plugin. Book names
 /// may be abbreviated (see {@link find_book_id_by_name}), and the space
-/// between book and chapter is optional. The inserted link is rendered as
-/// a collapsible verse quote by {@link MyBible.render_verse_quotes} and
-/// the live preview extension.
+/// between book and chapter is optional. A verse or verse range is
+/// inserted as a foldable callout holding the verse's link and its text
+/// (see {@link build_verse_quote_callout}); a whole chapter, having no
+/// text to quote, is inserted as a plain link.
 class VerseLinkSuggest extends EditorSuggest<VerseLinkSuggestion> {
 	plugin: MyBible
 
@@ -3461,6 +3576,7 @@ class VerseLinkSuggest extends EditorSuggest<VerseLinkSuggestion> {
 				label: "{0} {1}".format(book_name, String(chapter)),
 				file,
 				subpath: null,
+				verse_text: null,
 			}]
 		}
 		if (!this.plugin.has_linked_section(file, String(verse_start))) {
@@ -3475,10 +3591,17 @@ class VerseLinkSuggest extends EditorSuggest<VerseLinkSuggestion> {
 			? "{0} {1}:{2}-{3}".format(book_name, String(chapter), String(verse_start), String(verse_end))
 			: "{0} {1}:{2}".format(book_name, String(chapter), String(verse_start))
 
+		// Read now rather than when the suggestion is chosen, so that
+		// inserting it stays a single, synchronous edit
+		let verse_text = await this.plugin.get_linked_section_markdown(file, subpath)
+
 		return [{
 			label,
 			file,
 			subpath,
+			verse_text: verse_text !== null && verse_text.length > 0
+				? verse_text
+				: null,
 		}]
 	}
 
@@ -3486,13 +3609,11 @@ class VerseLinkSuggest extends EditorSuggest<VerseLinkSuggestion> {
 		el.addClass("mod-complex")
 		let content = el.createDiv({ cls: "suggestion-content" })
 		content.createDiv({ cls: "suggestion-title", text: value.label })
-		if (value.subpath !== null) {
-			let note = content.createDiv({ cls: "suggestion-note" })
-			this.plugin.get_linked_section_markdown(value.file, value.subpath).then(text => {
-				if (text === null) {
-					return
-				}
-				note.setText(text.length > 120 ? text.slice(0, 120) + "…" : text)
+		if (value.verse_text !== null) {
+			let text = value.verse_text
+			content.createDiv({
+				cls: "suggestion-note",
+				text: text.length > 120 ? text.slice(0, 120) + "…" : text,
 			})
 		}
 	}
@@ -3505,11 +3626,42 @@ class VerseLinkSuggest extends EditorSuggest<VerseLinkSuggestion> {
 			value.file,
 			this.context.file.path,
 			value.subpath !== null ? "#" + value.subpath : undefined,
+			// Titled "Genesis 1:1" rather than the "Genesis 1 > 1" that
+			// Obsidian shows a subpath link as: written into the note as an
+			// alias, it reads that way with or without this plugin
+			value.subpath !== null ? value.label : undefined,
 		)
-		this.context.editor.replaceRange(link, this.context.start, this.context.end)
 
-		let end_ch = this.context.start.ch + link.length
-		this.context.editor.setCursor({ line: this.context.start.line, ch: end_ch })
+		// A quote pastes the verse's own text into the note, so that it's
+		// still there wherever the note goes without the plugin (an
+		// exported PDF, say). A whole chapter has no text to quote.
+		let insert = value.verse_text === null
+			? link
+			: build_verse_quote_callout(
+				link,
+				value.verse_text,
+				this.plugin.settings.verse_preview_collapsed_by_default,
+			)
+
+		let start = this.context.start
+		if (value.verse_text !== null) {
+			// A callout has to start a line of its own, and end one
+			let before = this.context.editor.getLine(start.line).slice(0, start.ch)
+			if (before.trim().length > 0) {
+				insert = "\n" + insert
+			}
+			insert += "\n"
+		}
+
+		this.context.editor.replaceRange(insert, start, this.context.end)
+
+		let inserted = insert.split("\n")
+		this.context.editor.setCursor({
+			line: start.line + inserted.length - 1,
+			ch: inserted.length === 1
+				? start.ch + insert.length
+				: inserted[inserted.length - 1].length,
+		})
 	}
 }
 
@@ -3701,7 +3853,7 @@ class SettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Show verse text under Bible links')
-			.setDesc('When enabled, links to a specific verse in your built Bible (e.g. [[Genesis 1#1]]) will show the verse text in a collapsible quote right after the link, in both Reading view and Live Preview. Type "--" followed by a reference, like "--Genesis 1:1", to quickly insert one of these links as you write.')
+			.setDesc('When enabled, links to a specific verse in your built Bible (e.g. [[Genesis 1#1]]) will show the verse text in a collapsible quote right after the link, in both Reading view and Live Preview. Type "--" followed by a reference, like "--Genesis 1:1", to insert a quote as you write. Those paste the verse text into the note itself, inside a foldable callout, so the quote keeps working with this plugin turned off and is still there when the note is exported to PDF.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.verse_preview_enabled)
 				.onChange(async (value) => {

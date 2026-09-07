@@ -8,7 +8,6 @@ import { EditorState, RangeSetBuilder, StateField, Transaction } from "@codemirr
 import {
 	editorInfoField,
 	editorLivePreviewField,
-	MarkdownRenderer,
 	normalizePath,
 	TFile,
 } from "obsidian"
@@ -76,7 +75,7 @@ class VerseQuoteWidget extends WidgetType {
 				if (text === null || text.length === 0) {
 					return
 				}
-				await MarkdownRenderer.render(this.plugin.app, text, body, this.sourcePath, this.plugin)
+				await this.plugin.render_verse_body(text, body, this.sourcePath)
 			})
 			.catch(() => {})
 
@@ -145,6 +144,14 @@ function build_decorations(state: EditorState, plugin: MyBible): DecorationSet {
 
 		if (range_overlaps_selection(state, match_start, match_end)) {
 			// Leave the raw `[[...]]` text editable while the cursor is on it
+			continue
+		}
+
+		if (/^\s*>/.test(state.doc.lineAt(match_start).text)) {
+			// Inside a callout or blockquote — which is where the `--`
+			// trigger puts a verse's text, already quoted. Matches how
+			// MyBible.render_verse_quotes leaves those alone in Reading
+			// view; quoting into a quote helps nobody.
 			continue
 		}
 
