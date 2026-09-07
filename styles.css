@@ -110,12 +110,6 @@ If your plugin does not need CSS, delete this file.
 		border-left: 2px solid var(--background-modifier-border);
 		color: var(--text-normal);
 	}
-	.mb-verse-quote-body > *:first-child {
-		margin-top: 0;
-	}
-	.mb-verse-quote-body > *:last-child {
-		margin-bottom: 0;
-	}
 	/* A verse-range quote numbers its verses. The number is placed inside
 	   its verse's own first paragraph (see MyBible.render_verse_body), so
 	   it simply flows with the text and can't drift away from the verse it
@@ -181,22 +175,6 @@ If your plugin does not need CSS, delete this file.
 		margin-top: 0px !important;
 	}
 
-	/* Reading mode applies the verse-number style above to every h6 on the
-	   page, including any that turns up inside a verse quote — where its
-	   offsets (tuned for a full chapter note) drag it left, on top of the
-	   quote's border. Verse numbers are no longer headings, so this only
-	   catches a heading that's part of the quoted text itself. Must come
-	   last: these selectors only tie with the reading-mode ones above. */
-	.markdown-preview-view .mb-verse-quote-body h1,
-	.markdown-preview-view .mb-verse-quote-body h2,
-	.markdown-preview-view .mb-verse-quote-body h3,
-	.markdown-preview-view .mb-verse-quote-body h4,
-	.markdown-preview-view .mb-verse-quote-body h5,
-	.markdown-preview-view .mb-verse-quote-body h6 {
-		position: static;
-		margin: 0 0.35em 0 0 !important;
-		line-height: inherit;
-	}
 
 /* --- Quoted verse callouts --- */
 
