@@ -184,27 +184,30 @@ export function getPlugin():MyBible {
 	return MyBible.plugin
 }
 
+/// How long a request is given before it's called a lost cause. Generous
+/// on purpose: some of the Bible API's endpoints (verse counts, say)
+/// routinely take upwards of ten seconds to answer, and a build that gives
+/// up on one of those fails outright, so waiting beats failing.
+const HTTP_TIMEOUT_SECONDS = 60
+
 export function httpGet(theUrl: string): Promise<string> {
 	const request = requestUrl(theUrl).text;
 
+	let timer: ReturnType<typeof setTimeout>
 	const timeout = new Promise<never>((_, reject) =>
-		setTimeout(() => {
+		timer = setTimeout(() => {
 			const callSiteErr = new Error(
-				`Request timed out after 10 seconds: ${theUrl}`
+				`Request timed out after ${HTTP_TIMEOUT_SECONDS} seconds: ${theUrl}`
 			);
 			callSiteErr.name = "NetworkError";
 			reject(callSiteErr)
-		}, 10000)
+		}, HTTP_TIMEOUT_SECONDS * 1000)
 	);
 
-	try {
-		return Promise.race([request, timeout])
-			.catch((e) => {
-				throw e;
-			});
-	} catch (e) {
-		throw e;
-	}
+	// Stop the timer once the request settles, so a finished request
+	// doesn't leave one pending for the rest of the timeout
+	return Promise.race([request, timeout])
+		.finally(() => clearTimeout(timer))
 }
 
 export function is_alpha(string: string): boolean {
